@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  # ── OWASP Juice Shop ─────────────────────────────────────
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: juice-shop
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/rest/admin/application-version"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    restart: unless-stopped
+
+  # ── Test Runner (tùy chọn) ────────────────────────────────
+  # Dùng khi muốn chạy test hoàn toàn trong Docker
+  test-runner:
+    image: mcr.microsoft.com/playwright/python:v1.44.0-jammy
+    container_name: deadlock-tests
+    working_dir: /app
+    volumes:
+      - .:/app
+      - ./reports:/app/reports
+    environment:
+      - JUICE_SHOP_URL=http://juice-shop:3000
+      - PYTHONPATH=/app
+    depends_on:
+      juice-shop:
+        condition: service_healthy
+    command: >
+      bash -c "
+        pip install -r requirements.txt -q &&
+        python utils/generate_test_data.py &&
+        echo '=== Chạy FSM tests (không cần browser) ===' &&
+        pytest -m fsm_only -v --tb=short
+            --html=reports/report_fsm.html --self-contained-html &&
+        echo '=== Chạy UI tests ===' &&
+        pytest -m ui -v --tb=short
+            --html=reports/report_ui.html --self-contained-html
+      "
+    profiles:
+      - full-test
+
+networks:
+  default:
+    name: deadlock-network

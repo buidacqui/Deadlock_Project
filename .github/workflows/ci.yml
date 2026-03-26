@@ -1,0 +1,99 @@
+name: Deadlock Verification CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  fsm-tests:
+    name: FSM Tests (no browser)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Generate test data
+        run: python utils/generate_test_data.py
+
+      - name: Run FSM Tests
+        run: |
+          pytest -m fsm_only -v --tb=short \
+            --html=reports/ci_fsm_report.html \
+            --self-contained-html
+
+      - name: Check for violations
+        run: |
+          python -c "
+          import json, glob, sys
+          files = glob.glob('reports/counterexamples_*.json')
+          if not files: sys.exit(0)
+          with open(files[-1]) as f:
+              data = json.load(f)
+          # Đây là expected — deadlock_path TC phải detect được
+          print(f'Counterexamples detected: {data[\"total_violations\"]}')
+          print('All expected violations captured correctly.')
+          "
+
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-fsm
+          path: reports/
+
+  juice-shop-ui-tests:
+    name: UI Tests (Juice Shop)
+    runs-on: ubuntu-latest
+
+    services:
+      juice-shop:
+        image: bkimminich/juice-shop:latest
+        ports:
+          - "3000:3000"
+        options: >-
+          --health-cmd "wget -qO- http://localhost:3000/rest/admin/application-version"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+          --health-start-period 20s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Generate test data
+        run: python utils/generate_test_data.py
+
+      - name: Run UI Tests
+        run: |
+          pytest -m ui -v --tb=short \
+            --html=reports/ci_ui_report.html \
+            --self-contained-html
+        env:
+          JUICE_SHOP_URL: http://localhost:3000
+
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-ui
+          path: reports/

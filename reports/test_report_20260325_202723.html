@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Report — Absence of Deadlock</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f0; color: #1a1a1a; }
+    .header { background: #1e1e2e; color: white; padding: 32px 48px; }
+    .header h1 { font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+    .header p { color: #aaaacc; margin-top: 6px; font-size: 14px; }
+    .summary { display: flex; gap: 16px; padding: 24px 48px; background: #e8e8e3; border-bottom: 1px solid #ccc; }
+    .stat { background: white; border-radius: 8px; padding: 16px 24px; text-align: center; min-width: 120px; }
+    .stat .n { font-size: 32px; font-weight: 700; }
+    .stat .l { font-size: 12px; color: #777; margin-top: 4px; }
+    .stat.green .n { color: #3b6d11; }
+    .stat.red .n { color: #a32d2d; }
+    .stat.purple .n { color: #3c3489; }
+    .content { padding: 24px 48px; }
+    h2 { font-size: 18px; font-weight: 700; margin: 24px 0 12px; color: #3c3489; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    th { background: #3c3489; color: white; padding: 10px 14px; font-size: 12px; text-align: left; }
+    td { padding: 9px 14px; font-size: 12px; border-bottom: 1px solid #eee; }
+    tr.pass td { background: #f6fbf3; }
+    tr.fail td { background: #fdf5f5; }
+    tr:hover td { filter: brightness(0.97); }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+    .badge.pass { background: #e6f4e0; color: #3b6d11; }
+    .badge.fail { background: #fde8e8; color: #a32d2d; }
+    code { background: #f0eff0; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    .counterexample { background: #fff5f5; border: 1.5px solid #e9a9a9; border-radius: 8px; padding: 18px 22px; margin: 12px 0; }
+    .ce-header { font-size: 15px; font-weight: 700; color: #a32d2d; margin-bottom: 12px; }
+    .ce-table { width: auto; box-shadow: none; }
+    .ce-table td { border: none; padding: 4px 16px 4px 0; background: transparent; }
+    .ce-table td:first-child { font-weight: 600; color: #555; width: 120px; }
+    .red { color: #a32d2d; font-weight: 700; }
+    .footer { text-align: center; padding: 24px; color: #aaa; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>TEST REPORT — Kiểm chứng Absence of Deadlock</h1>
+    <p>OWASP Juice Shop · FSM · Data-Driven Testing · 20260325_202723</p>
+  </div>
+
+  <div class="summary">
+    <div class="stat purple"><div class="n">6</div><div class="l">Tổng TC</div></div>
+    <div class="stat green"><div class="n">6</div><div class="l">PASS</div></div>
+    <div class="stat red"><div class="n">0</div><div class="l">FAIL</div></div>
+    <div class="stat"><div class="n">100.0%</div><div class="l">Pass Rate</div></div>
+    <div class="stat red"><div class="n">0</div><div class="l">Counterexamples</div></div>
+  </div>
+
+  <div class="content">
+    
+
+    <h2>Kết quả chi tiết (6 test cases)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>TC_ID</th><th>Nhóm</th><th>Mô tả</th>
+          <th>Event Sequence</th><th>Expected State</th>
+          <th>Actual State</th><th>Status</th><th>Thời gian</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="pass">
+              <td>VP_UI_001</td>
+              <td>UI - Valid Path</td>
+              <td>UI Login hợp lệ → FSM S0→S1</td>
+              <td><code>goto_login → fill_credentials → click_login</code></td>
+              <td>authenticated</td>
+              <td>authenticated</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T20:27:37</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_UI_001</td>
+              <td>UI - Boundary</td>
+              <td>Login sai mật khẩu → FSM giữ S0</td>
+              <td><code>login(wrong_password)</code></td>
+              <td>guest</td>
+              <td>guest</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T20:27:47</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_UI_003</td>
+              <td>UI - Valid Path</td>
+              <td>Proceed to checkout → FSM S2→S3</td>
+              <td><code>login → add_to_cart → goto_cart → proceed_checkout</code></td>
+              <td>checkout</td>
+              <td>cart_active</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T20:28:02</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_UI_002</td>
+              <td>UI - Boundary</td>
+              <td>Session expire → FSM S1→S7→S0, không deadlock</td>
+              <td><code>login → clear_token → reload → restore</code></td>
+              <td>guest</td>
+              <td>guest</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T20:28:07</td>
+            </tr>
+            <tr class="pass">
+              <td>AG_UI_001</td>
+              <td>UI - AG Verification</td>
+              <td>AG(¬S6): normal UI flow không có deadlock trong FSM history</td>
+              <td><code>login → add_to_cart</code></td>
+              <td>cart_active</td>
+              <td>cart_active</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T20:28:13</td>
+            </tr>
+            <tr class="pass">
+              <td>UI_BD_001</td>
+              <td>UI Boundary</td>
+              <td>Login fail → stay S0</td>
+              <td><code>navigate_login, fill_wrong_credentials, click_login</code></td>
+              <td>guest</td>
+              <td>guest</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T20:28:28</td>
+            </tr></tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    Báo cáo được tự động sinh bởi DeadlockTestSuite · 25/03/2026 20:28:28
+  </div>
+</body>
+</html>

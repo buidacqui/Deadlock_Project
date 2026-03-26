@@ -1,0 +1,23 @@
+# ── Core testing ──────────────────────────────────────────
+pytest==8.1.1
+pytest-html==4.1.1
+pytest-playwright==0.5.0
+pytest-xdist==3.5.0
+pytest-timeout==2.3.1
+
+# ── Playwright browser automation ─────────────────────────
+playwright==1.44.0
+
+# ── Data-Driven Testing ────────────────────────────────────
+pandas==2.2.2
+openpyxl==3.1.2
+
+# ── FSM Engine (pure Python — no extra dep) ───────────────
+# transitions==0.9.1   ← không cần, FSM viết thuần Python
+
+# ── Allure reporting ──────────────────────────────────────
+allure-pytest==2.13.5
+
+# ── Utilities ─────────────────────────────────────────────
+colorama==0.4.6
+tabulate==0.9.0

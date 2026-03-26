@@ -1,0 +1,46 @@
+# configs/allure.yml
+# Cấu hình Allure Report cho dự án Deadlock Verification
+# Dùng với: pytest --alluredir=reports/allure_results
+
+allure:
+  project_name: "Absence of Deadlock — OWASP Juice Shop"
+  report_title: "Kiểm chứng AG(¬deadlock) — FSM Workflow Testing"
+
+  # Phân loại test theo Epic > Feature > Story
+  categories:
+    - name: "Valid Path Tests"
+      matchedStatuses: ["passed"]
+      messageRegex: ".*VP_.*"
+
+    - name: "Deadlock Detected (Expected)"
+      matchedStatuses: ["passed"]
+      messageRegex: ".*DL_.*"
+
+    - name: "Boundary State Tests"
+      matchedStatuses: ["passed"]
+      messageRegex: ".*BD_.*"
+
+    - name: "Concurrent Tests"
+      matchedStatuses: ["passed"]
+      messageRegex: ".*CC_.*"
+
+    - name: "AG(¬deadlock) Violations"
+      matchedStatuses: ["failed"]
+      messageRegex: ".*deadlock.*VIOLATED.*"
+
+  # Environment info hiển thị trong Allure dashboard
+  environment:
+    - name: "Application"
+      value: "OWASP Juice Shop"
+    - name: "Methodology"
+      value: "FSM + Data-Driven Testing (DDT)"
+    - name: "Property Verified"
+      value: "AG(not deadlock)"
+    - name: "Framework"
+      value: "Python 3.11 + pytest + Playwright"
+    - name: "FSM States"
+      value: "8 (S0-S7)"
+    - name: "Total Test Cases"
+      value: "32 FSM + 6 UI"
+    - name: "Base URL"
+      value: "http://localhost:3000"

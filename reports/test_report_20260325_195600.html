@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Report — Absence of Deadlock</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f0; color: #1a1a1a; }
+    .header { background: #1e1e2e; color: white; padding: 32px 48px; }
+    .header h1 { font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+    .header p { color: #aaaacc; margin-top: 6px; font-size: 14px; }
+    .summary { display: flex; gap: 16px; padding: 24px 48px; background: #e8e8e3; border-bottom: 1px solid #ccc; }
+    .stat { background: white; border-radius: 8px; padding: 16px 24px; text-align: center; min-width: 120px; }
+    .stat .n { font-size: 32px; font-weight: 700; }
+    .stat .l { font-size: 12px; color: #777; margin-top: 4px; }
+    .stat.green .n { color: #3b6d11; }
+    .stat.red .n { color: #a32d2d; }
+    .stat.purple .n { color: #3c3489; }
+    .content { padding: 24px 48px; }
+    h2 { font-size: 18px; font-weight: 700; margin: 24px 0 12px; color: #3c3489; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    th { background: #3c3489; color: white; padding: 10px 14px; font-size: 12px; text-align: left; }
+    td { padding: 9px 14px; font-size: 12px; border-bottom: 1px solid #eee; }
+    tr.pass td { background: #f6fbf3; }
+    tr.fail td { background: #fdf5f5; }
+    tr:hover td { filter: brightness(0.97); }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+    .badge.pass { background: #e6f4e0; color: #3b6d11; }
+    .badge.fail { background: #fde8e8; color: #a32d2d; }
+    code { background: #f0eff0; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    .counterexample { background: #fff5f5; border: 1.5px solid #e9a9a9; border-radius: 8px; padding: 18px 22px; margin: 12px 0; }
+    .ce-header { font-size: 15px; font-weight: 700; color: #a32d2d; margin-bottom: 12px; }
+    .ce-table { width: auto; box-shadow: none; }
+    .ce-table td { border: none; padding: 4px 16px 4px 0; background: transparent; }
+    .ce-table td:first-child { font-weight: 600; color: #555; width: 120px; }
+    .red { color: #a32d2d; font-weight: 700; }
+    .footer { text-align: center; padding: 24px; color: #aaa; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>TEST REPORT — Kiểm chứng Absence of Deadlock</h1>
+    <p>OWASP Juice Shop · FSM · Data-Driven Testing · 20260325_195600</p>
+  </div>
+
+  <div class="summary">
+    <div class="stat purple"><div class="n">32</div><div class="l">Tổng TC</div></div>
+    <div class="stat green"><div class="n">32</div><div class="l">PASS</div></div>
+    <div class="stat red"><div class="n">0</div><div class="l">FAIL</div></div>
+    <div class="stat"><div class="n">100.0%</div><div class="l">Pass Rate</div></div>
+    <div class="stat red"><div class="n">8</div><div class="l">Counterexamples</div></div>
+  </div>
+
+  <div class="content">
+    <h2>⚠ Counterexample Report</h2>
+            <div class="counterexample">
+              <div class="ce-header">⚠ COUNTEREXAMPLE — DL_001</div>
+              <table class="ce-table">
+                <tr><td>Property</td><td><code>AG(¬deadlock)</code> — <strong>VIOLATED</strong></td></tr>
+                <tr><td>Init State</td><td>guest</td></tr>
+                <tr><td>Path Taken</td><td><code>guest → authenticated → cart_active → checkout → deadlock</code></td></tr>
+                <tr><td>Deadlock At</td><td class="red">deadlock</td></tr>
+                <tr><td>Reason</td><td>Concurrent checkout scenario S3→S6</td></tr>
+              </table>
+            </div>
+            <div class="counterexample">
+              <div class="ce-header">⚠ COUNTEREXAMPLE — DL_002</div>
+              <table class="ce-table">
+                <tr><td>Property</td><td><code>AG(¬deadlock)</code> — <strong>VIOLATED</strong></td></tr>
+                <tr><td>Init State</td><td>guest</td></tr>
+                <tr><td>Path Taken</td><td><code>guest → authenticated → cart_active → checkout → processing → deadlock</code></td></tr>
+                <tr><td>Deadlock At</td><td class="red">deadlock</td></tr>
+                <tr><td>Reason</td><td>Processing state deadlock S4→S6</td></tr>
+              </table>
+            </div>
+            <div class="counterexample">
+              <div class="ce-header">⚠ COUNTEREXAMPLE — DL_003</div>
+              <table class="ce-table">
+                <tr><td>Property</td><td><code>AG(¬deadlock)</code> — <strong>VIOLATED</strong></td></tr>
+                <tr><td>Init State</td><td>guest</td></tr>
+                <tr><td>Path Taken</td><td><code>guest → authenticated → cart_active → checkout → deadlock</code></td></tr>
+                <tr><td>Deadlock At</td><td class="red">deadlock</td></tr>
+                <tr><td>Reason</td><td>Resource lock scenario</td></tr>
+              </table>
+            </div>
+            <div class="counterexample">
+              <div class="ce-header">⚠ COUNTEREXAMPLE — DL_004</div>
+              <table class="ce-table">
+                <tr><td>Property</td><td><code>AG(¬deadlock)</code> — <strong>VIOLATED</strong></td></tr>
+                <tr><td>Init State</td><td>guest</td></tr>
+                <tr><td>Path Taken</td><td><code>guest → authenticated → cart_active → checkout → processing → checkout → processing → deadlock</code></td></tr>
+                <tr><td>Deadlock At</td><td class="red">deadlock</td></tr>
+                <tr><td>Reason</td><td>Retry loop → deadlock</td></tr>
+              </table>
+            </div>
+            <div class="counterexample">
+              <div class="ce-header">⚠ COUNTEREXAMPLE — DL_005</div>
+              <table class="ce-table">
+                <tr><td>Property</td><td><code>AG(¬deadlock)</code> — <strong>VIOLATED</strong></td></tr>
+                <tr><td>Init State</td><td>guest</td></tr>
+                <tr><td>Path Taken</td><td><code>guest → authenticated → cart_active → checkout → processing → deadlock</code></td></tr>
+                <tr><td>Deadlock At</td><td class="red">deadlock</td></tr>
+                <tr><td>Reason</td><td>Payment gateway race condition</td></tr>
+              </table>
+            </div>
+            <div class="counterexample">
+              <div class="ce-header">⚠ COUNTEREXAMPLE — DL_006</div>
+              <table class="ce-table">
+                <tr><td>Property</td><td><code>AG(¬deadlock)</code> — <strong>VIOLATED</strong></td></tr>
+                <tr><td>Init State</td><td>guest</td></tr>
+                <tr><td>Path Taken</td><td><code>guest → authenticated → cart_active → checkout → deadlock</code></td></tr>
+                <tr><td>Deadlock At</td><td class="red">deadlock</td></tr>
+                <tr><td>Reason</td><td>3-session circular wait</td></tr>
+              </table>
+            </div>
+            <div class="counterexample">
+              <div class="ce-header">⚠ COUNTEREXAMPLE — DL_007</div>
+              <table class="ce-table">
+                <tr><td>Property</td><td><code>AG(¬deadlock)</code> — <strong>VIOLATED</strong></td></tr>
+                <tr><td>Init State</td><td>guest</td></tr>
+                <tr><td>Path Taken</td><td><code>guest → authenticated → cart_active → checkout → deadlock</code></td></tr>
+                <tr><td>Deadlock At</td><td class="red">deadlock</td></tr>
+                <tr><td>Reason</td><td>Cart lock deadlock</td></tr>
+              </table>
+            </div>
+            <div class="counterexample">
+              <div class="ce-header">⚠ COUNTEREXAMPLE — DL_008</div>
+              <table class="ce-table">
+                <tr><td>Property</td><td><code>AG(¬deadlock)</code> — <strong>VIOLATED</strong></td></tr>
+                <tr><td>Init State</td><td>guest</td></tr>
+                <tr><td>Path Taken</td><td><code>guest → authenticated → cart_active → checkout → processing → deadlock</code></td></tr>
+                <tr><td>Deadlock At</td><td class="red">deadlock</td></tr>
+                <tr><td>Reason</td><td>Lock not released</td></tr>
+              </table>
+            </div>
+
+    <h2>Kết quả chi tiết (32 test cases)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>TC_ID</th><th>Nhóm</th><th>Mô tả</th>
+          <th>Event Sequence</th><th>Expected State</th>
+          <th>Actual State</th><th>Status</th><th>Thời gian</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="pass">
+              <td>VP_001</td>
+              <td>Valid Path</td>
+              <td>Luồng hoàn chỉnh: đăng nhập → thêm 1 sp → checkout → thanh toán → xác nhận</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_002</td>
+              <td>Valid Path</td>
+              <td>Thêm 2 sản phẩm trước khi checkout</td>
+              <td><code>do_login,do_add_to_cart,do_add_to_cart,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_003</td>
+              <td>Valid Path</td>
+              <td>Login → add sp → cancel → add lại → checkout → pay → confirm</td>
+              <td><code>do_login,do_add_to_cart,do_cancel,do_add_to_cart,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_004</td>
+              <td>Valid Path</td>
+              <td>Payment fail rồi retry thành công</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_pay_fail,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_005</td>
+              <td>Valid Path</td>
+              <td>Thêm 3 sản phẩm, checkout, xác nhận đơn hàng</td>
+              <td><code>do_login,do_add_to_cart,do_add_to_cart,do_add_to_cart,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_006</td>
+              <td>Valid Path</td>
+              <td>Hủy checkout rồi vào lại checkout</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_cancel,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_007</td>
+              <td>Valid Path</td>
+              <td>Luồng đầy đủ với empty cart check trước</td>
+              <td><code>do_login,do_add_to_cart,do_empty_cart,do_add_to_cart,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_008</td>
+              <td>Valid Path</td>
+              <td>Payment fail 2 lần rồi thành công</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_pay_fail,do_pay,do_pay_fail,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_009</td>
+              <td>Valid Path</td>
+              <td>Nhiều lần cancel và thêm sản phẩm</td>
+              <td><code>do_login,do_add_to_cart,do_cancel,do_add_to_cart,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>VP_010</td>
+              <td>Valid Path</td>
+              <td>Luồng nhanh nhất có thể</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_001</td>
+              <td>Boundary State</td>
+              <td>Checkout với giỏ hàng rỗng (không có sản phẩm)</td>
+              <td><code>do_login,do_add_to_cart,do_empty_cart</code></td>
+              <td>cart_active</td>
+              <td>cart_active</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_002</td>
+              <td>Boundary State</td>
+              <td>Session hết hạn tại bước checkout</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_session_expire,do_restore</code></td>
+              <td>guest</td>
+              <td>guest</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_003</td>
+              <td>Boundary State</td>
+              <td>Session hết hạn tại bước processing</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_session_expire,do_restore</code></td>
+              <td>guest</td>
+              <td>guest</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_004</td>
+              <td>Boundary State</td>
+              <td>Đăng nhập sai mật khẩu nhiều lần</td>
+              <td><code>do_login_fail,do_login_fail,do_login_fail,do_login</code></td>
+              <td>authenticated</td>
+              <td>authenticated</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_005</td>
+              <td>Boundary State</td>
+              <td>Session expire tại cart_active rồi khôi phục</td>
+              <td><code>do_login,do_add_to_cart,do_session_expire,do_restore</code></td>
+              <td>guest</td>
+              <td>guest</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_006</td>
+              <td>Boundary State</td>
+              <td>Cancel ngay khi vừa vào checkout</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_cancel</code></td>
+              <td>cart_active</td>
+              <td>cart_active</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_007</td>
+              <td>Boundary State</td>
+              <td>Nhiều lần session expire liên tiếp</td>
+              <td><code>do_login,do_session_expire,do_restore,do_login,do_add_to_cart,do_checkout,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>BD_008</td>
+              <td>Boundary State</td>
+              <td>Payment fail nhiều lần nhưng không deadlock</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_pay_fail,do_pay,do_pay_fail,do_pay,do_pay_fail,do_pay,do_confirm</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>DL_001</td>
+              <td>Deadlock Path</td>
+              <td>2 session cùng checkout cùng order → circular wait</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_deadlock</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>DL_002</td>
+              <td>Deadlock Path</td>
+              <td>Block payment → retry liên tục → deadlock</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_deadlock</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>DL_003</td>
+              <td>Deadlock Path</td>
+              <td>Session A lock resource, Session B đang chờ A trong checkout</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_deadlock</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>DL_004</td>
+              <td>Deadlock Path</td>
+              <td>Nhiều retry payment tạo deadlock trong processing</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_pay_fail,do_pay,do_deadlock</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>DL_005</td>
+              <td>Deadlock Path</td>
+              <td>2 session tranh chấp payment gateway cùng lúc</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_deadlock</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>DL_006</td>
+              <td>Deadlock Path</td>
+              <td>Circular wait: A chờ B, B chờ C, C chờ A</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_deadlock</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>DL_007</td>
+              <td>Deadlock Path</td>
+              <td>Double lock trên cart trong concurrent add-to-cart</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_deadlock</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>DL_008</td>
+              <td>Deadlock Path</td>
+              <td>Session A giữ lock S3, không release, B timeout rồi cả hai deadlock</td>
+              <td><code>do_login,do_add_to_cart,do_checkout,do_pay,do_deadlock</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>CC_001</td>
+              <td>Concurrent</td>
+              <td>2 session checkout song song cùng order_id → circular wait</td>
+              <td><code>CONCURRENT:session_a=do_login+do_add_to_cart+do_checkout,session_b=do_login+do_a...</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>CC_002</td>
+              <td>Concurrent</td>
+              <td>Session A giữ S3, B phải chờ → B timeout → không circular wait</td>
+              <td><code>CONCURRENT:session_a=do_login+do_add_to_cart+do_checkout,session_b=do_login+do_a...</code></td>
+              <td>guest</td>
+              <td>guest</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>CC_003</td>
+              <td>Concurrent</td>
+              <td>3 session, circular wait A→B→C→A</td>
+              <td><code>CONCURRENT:session_a=do_login+do_add_to_cart+do_checkout,session_b=do_login+do_a...</code></td>
+              <td>deadlock</td>
+              <td>deadlock</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>CC_004</td>
+              <td>Concurrent</td>
+              <td>2 session checkout các order khác nhau — không deadlock</td>
+              <td><code>CONCURRENT:session_a=do_login+do_add_to_cart+do_checkout+do_pay+do_confirm,sessi...</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>CC_005</td>
+              <td>Concurrent</td>
+              <td>Session A lock payment gateway, B chờ → A fail → B tiếp tục</td>
+              <td><code>CONCURRENT:session_a=do_login+do_add_to_cart+do_checkout+do_pay+do_pay_fail,sess...</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr>
+            <tr class="pass">
+              <td>CC_006</td>
+              <td>Concurrent</td>
+              <td>2 session, A deadlock, B vẫn hoàn thành bình thường</td>
+              <td><code>CONCURRENT:session_a=do_login+do_add_to_cart+do_checkout+do_deadlock,session_b=d...</code></td>
+              <td>confirmed</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-25T19:56:00</td>
+            </tr></tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    Báo cáo được tự động sinh bởi DeadlockTestSuite · 25/03/2026 19:56:00
+  </div>
+</body>
+</html>
