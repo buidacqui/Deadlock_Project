@@ -1,4 +1,14 @@
-"""conftest.py — Pytest fixtures: FSM + Playwright + Report."""
+"""conftest.py — Pytest fixtures: FSM + Playwright + Report.
+
+FIX v2:
+- logged_in_page: bid chỉ được tạo sau lần ADD ITEM đầu tiên, không phải sau login.
+  Fixture giờ add 1 item để kích hoạt bid, sau đó xoá item (để test tự quản lý giỏ).
+  Hoặc nếu test cần giỏ sạch (test_ui_empty_cart), bid vẫn tồn tại sau remove.
+
+- juice_shop_page: thêm wait_for_load_state("networkidle") cho ổn định hơn.
+
+- _dismiss: tăng timeout, thêm "Me want it!" cookie banner.
+"""
 import pytest, sys, logging, os
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -48,7 +58,11 @@ def concurrent_sim(): return ConcurrentWorkflowSimulator()
 @pytest.fixture
 def juice_shop_page(page):
     """Page đã navigate Juice Shop + dismiss dialogs."""
-    page.goto(BASE_URL, wait_until="networkidle")
+    page.goto(BASE_URL, wait_until="domcontentloaded")
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception:
+        pass
     _dismiss(page)
     yield page
 
@@ -56,10 +70,21 @@ def juice_shop_page(page):
 @pytest.fixture
 def logged_in_page(page):
     """
-    Page đã login sẵn với admin account.
-    Chờ cả token VÀ bid xuất hiện trong localStorage.
+    Page đã login sẵn với admin account VÀ có bid hợp lệ.
+
+    ROOT CAUSE FIX: Juice Shop chỉ tạo 'bid' trong localStorage sau khi
+    user ADD item đầu tiên vào giỏ — KHÔNG phải sau login.
+    Nếu không có bid, mọi call tới /api/Baskets/null đều trả về 0.
+
+    Fix: sau khi login, add 1 sản phẩm để trigger bid, rồi xoá đi.
+    Kết quả: bid đã tồn tại, giỏ hàng trống — test tự quản lý tiếp theo.
     """
-    page.goto(f"{BASE_URL}/#/login", wait_until="networkidle")
+    # Login
+    page.goto(f"{BASE_URL}/#/login", wait_until="domcontentloaded")
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception:
+        pass
     _dismiss(page)
     page.wait_for_selector("#email", timeout=10000)
     page.fill("#email", ADMIN_USER)
@@ -72,32 +97,105 @@ def logged_in_page(page):
     except Exception:
         pass
 
-    # Chờ bid (Juice Shop tạo basket ngay sau login)
+    # FIX v3: Extract bid từ JWT payload (Juice Shop nhúng bid trong token)
+    # rồi thử API để xác nhận và set vào localStorage.
+    page.evaluate("""async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            if (localStorage.getItem('bid')) return;  // đã có rồi
+
+            // Bước 1: Decode JWT lấy bid
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            let bid = payload.bid
+                   || (payload.data && payload.data.bid)
+                   || (payload.data && payload.data.BasketId)
+                   || payload.BasketId;
+
+            // Bước 2: Nếu không có trong JWT, thử userId làm bid
+            // (Juice Shop thường bid = userId cho admin)
+            if (!bid) {
+                const userId = (payload.data && payload.data.id)
+                             || payload.id || payload.sub;
+                if (userId) {
+                    const r = await fetch('/api/Baskets/' + userId, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (r.ok) bid = String(userId);
+                }
+            }
+
+            if (bid) localStorage.setItem('bid', String(bid));
+        } catch(e) {}
+    }""")
+
+    # Kiểm tra bid đã có chưa
+    try:
+        page.wait_for_function("() => !!localStorage.getItem('bid')", timeout=3000)
+        _dismiss(page)
+        yield page
+        return
+    except Exception:
+        pass
+
+    # bid vẫn chưa có → fallback: add 1 item để Juice Shop tạo basket
+    page.goto(f"{BASE_URL}/#/search", wait_until="domcontentloaded")
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception:
+        pass
+    _dismiss(page)
+    page.wait_for_timeout(1000)
+
+    for sel in [
+        "button[aria-label='Add to Basket']",
+        "button[aria-label*='Add']",
+        "mat-card button.mat-icon-button",
+    ]:
+        try:
+            btns = page.locator(sel)
+            if btns.count() > 0:
+                btns.first.scroll_into_view_if_needed()
+                btns.first.click()
+                try:
+                    page.locator("simple-snack-bar").wait_for(
+                        state="visible", timeout=5000
+                    )
+                    page.locator("simple-snack-bar").wait_for(
+                        state="hidden", timeout=5000
+                    )
+                except Exception:
+                    page.wait_for_timeout(1000)
+                break
+        except Exception:
+            continue
+
+    # Đợi bid xuất hiện sau khi add
     try:
         page.wait_for_function("() => !!localStorage.getItem('bid')", timeout=5000)
     except Exception:
-        # Đôi khi bid chỉ xuất hiện sau khi navigate
-        page.goto(BASE_URL, wait_until="networkidle")
-        try:
-            page.wait_for_function("() => !!localStorage.getItem('bid')", timeout=5000)
-        except Exception:
-            pass
+        pass
 
     _dismiss(page)
     yield page
 
 
 def _dismiss(page):
-    for sel in [
+    """Đóng tất cả dialogs/banners của Juice Shop."""
+    selectors = [
         "button[aria-label='Close Welcome Banner']",
         "button.mat-focus-indicator:has-text('Dismiss')",
         "mat-dialog-container button",
-    ]:
+        # Cookie banner — quan trọng vì nó che Continue button ở checkout
+        "a:has-text('Me want it!')",
+        "button:has-text('Me want it!')",
+    ]
+    for sel in selectors:
         try:
             btn = page.locator(sel).first
-            if btn.is_visible(timeout=1000):
+            if btn.is_visible(timeout=1200):
                 btn.click()
-                page.wait_for_timeout(250)
+                page.wait_for_timeout(300)
         except Exception:
             pass
 

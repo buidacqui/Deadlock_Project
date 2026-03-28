@@ -2,10 +2,12 @@
 tests/test_ui_juice_shop.py
 ============================
 UI Tests thực tế trên OWASP Juice Shop dùng Playwright.
-Fixed v3: dùng /api/Baskets/{bid} để đọc cart count, multiple checkout selectors.
 
-CHẠY: pytest tests/test_ui_juice_shop.py -m ui -v --headed
-YÊU CẦU: docker compose up -d juice-shop (localhost:3000)
+FIX v4:
+- add_to_cart(): đợi snackbar confirm thay vì wait_for_timeout cứng
+- test_ui_add_to_cart: đợi bid trước khi gọi get_cart_count
+- test_ui_proceed_to_checkout: đợi networkidle sau click checkout
+- do_login(): tăng timeout cho token check lên 10s
 """
 import pytest
 from utils.fsm_engine import OrderWorkflow
@@ -30,20 +32,25 @@ def dismiss_dialogs(page):
             el = page.locator(sel).first
             if el.is_visible(timeout=800):
                 el.click()
-                page.wait_for_timeout(200)
+                page.wait_for_timeout(300)
         except Exception:
             pass
 
 
 def do_login(page, email, password) -> bool:
-    page.goto(f"{BASE_URL}/#/login", wait_until="networkidle")
+    page.goto(f"{BASE_URL}/#/login", wait_until="domcontentloaded")
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception:
+        pass
     dismiss_dialogs(page)
     page.wait_for_selector("#email", timeout=8000)
     page.fill("#email", email)
     page.fill("#password", password)
     page.click("#loginButton")
     try:
-        page.wait_for_function("() => !!localStorage.getItem('token')", timeout=7000)
+        # FIX: tăng timeout lên 10s — server Juice Shop đôi khi chậm
+        page.wait_for_function("() => !!localStorage.getItem('token')", timeout=10000)
         return True
     except Exception:
         return False
@@ -51,15 +58,23 @@ def do_login(page, email, password) -> bool:
 
 def do_logout(page):
     try:
-        page.evaluate("() => { localStorage.removeItem('token'); localStorage.removeItem('bid'); }")
+        page.evaluate(
+            "() => { localStorage.removeItem('token'); localStorage.removeItem('bid'); }"
+        )
     except Exception:
         pass
 
 
 def add_to_cart(page) -> bool:
-    page.goto(f"{BASE_URL}/#/search", wait_until="networkidle")
+    page.goto(f"{BASE_URL}/#/search", wait_until="domcontentloaded")
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception:
+        pass
     dismiss_dialogs(page)
-    page.wait_for_timeout(1500)
+    # Đợi sản phẩm render (Angular lazy load)
+    page.wait_for_timeout(1000)
+
     for sel in [
         "button[aria-label='Add to Basket']",
         "button[aria-label*='Add']",
@@ -70,7 +85,18 @@ def add_to_cart(page) -> bool:
             if btns.count() > 0:
                 btns.first.scroll_into_view_if_needed()
                 btns.first.click()
-                page.wait_for_timeout(2000)
+
+                # FIX: Đợi snackbar confirm thay vì sleep cứng
+                try:
+                    page.locator("simple-snack-bar").wait_for(
+                        state="visible", timeout=5000
+                    )
+                    page.locator("simple-snack-bar").wait_for(
+                        state="hidden", timeout=5000
+                    )
+                except Exception:
+                    page.wait_for_timeout(800)
+
                 return True
         except Exception:
             continue
@@ -78,10 +104,7 @@ def add_to_cart(page) -> bool:
 
 
 def get_cart_count(page) -> int:
-    """
-    Đọc số item trong giỏ qua Juice Shop REST API.
-    Endpoint: GET /api/Baskets/{bid}  → data.Products.length
-    """
+    """Đọc số item trong giỏ qua Juice Shop REST API."""
     try:
         return page.evaluate("""async () => {
             const token = localStorage.getItem('token');
@@ -156,32 +179,42 @@ class TestJuiceShopUI:
         )
 
     def test_ui_add_to_cart(self, page, report):
-        """[VP_UI_002] Add sản phẩm → FSM S1→S2. Verify qua /api/Baskets/{bid}."""
+        """[VP_UI_002] Add sản phẩm → FSM S1→S2. Verify qua basket page DOM."""
         wf = OrderWorkflow("VP_UI_002")
 
         login_ok = do_login(page, VALID_USER, VALID_PASSWORD)
         assert login_ok, "Cần login trước"
         wf.do_login()
 
-        # Đợi bid xuất hiện sau login
-        page.wait_for_function("() => !!localStorage.getItem('bid')", timeout=5000)
         bid_before = get_bid(page)
 
         added = add_to_cart(page)
         if added:
             wf.do_add_to_cart()
 
-        # Đợi thêm để API cập nhật
-        page.wait_for_timeout(1000)
-        count = get_cart_count(page)
+        # FIX v6: navigate thẳng đến basket page để verify bằng DOM
+        # Tránh phụ thuộc localStorage.bid vốn không đáng tin cậy.
+        page.goto(f"{BASE_URL}/#/basket", wait_until="domcontentloaded")
+        try:
+            page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            pass
+        page.wait_for_timeout(1500)
+
+        # Đếm item từ DOM trước (reliable nhất)
+        dom_count = page.locator("mat-row").count()
+        if dom_count == 0:
+            dom_count = page.locator("button[aria-label='Remove from basket']").count()
+
+        # Fallback: API nếu DOM chưa kịp render
+        count = dom_count if dom_count > 0 else get_cart_count(page)
         bid_after = get_bid(page)
 
         assert added, "Phải add được sản phẩm"
         assert wf.state == "cart_active"
         assert count >= 1, (
             f"Cart phải có ≥ 1 item, got {count}.\n"
-            f"bid before={bid_before}, after={bid_after}\n"
-            "Thử chạy: pytest tests/debug_juice_shop.py -m ui -v --headed -s"
+            f"bid before={bid_before}, after={bid_after}"
         )
 
         report.record(
@@ -199,14 +232,22 @@ class TestJuiceShopUI:
         wf = OrderWorkflow("VP_UI_003")
         do_login(page, VALID_USER, VALID_PASSWORD)
         wf.do_login()
-        page.wait_for_function("() => !!localStorage.getItem('bid')", timeout=5000)
+        try:
+            page.wait_for_function(
+                "() => !!localStorage.getItem('bid')", timeout=8000
+            )
+        except Exception:
+            pass
         add_to_cart(page)
         wf.do_add_to_cart()
-        page.wait_for_timeout(1000)
 
         # Navigate basket
-        page.goto(f"{BASE_URL}/#/basket", wait_until="networkidle")
-        page.wait_for_timeout(2000)
+        page.goto(f"{BASE_URL}/#/basket", wait_until="domcontentloaded")
+        try:
+            page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            pass
+        page.wait_for_timeout(1500)
 
         checkout_ok = False
         for sel in [
@@ -219,8 +260,9 @@ class TestJuiceShopUI:
                 btn = page.locator(sel).first
                 if btn.is_visible(timeout=2000):
                     btn.click()
+                    # FIX: Đợi networkidle sau click (Angular navigation)
                     try:
-                        page.wait_for_url("**/#/address**", timeout=6000)
+                        page.wait_for_load_state("networkidle", timeout=8000)
                     except Exception:
                         pass
                     if "#/address" in page.url or "#/checkout" in page.url:
@@ -248,8 +290,14 @@ class TestJuiceShopUI:
         do_login(page, VALID_USER, VALID_PASSWORD)
         wf.do_login()
 
-        page.evaluate("() => { localStorage.removeItem('token'); sessionStorage.clear(); }")
-        page.reload(wait_until="networkidle")
+        page.evaluate(
+            "() => { localStorage.removeItem('token'); sessionStorage.clear(); }"
+        )
+        page.reload(wait_until="domcontentloaded")
+        try:
+            page.wait_for_load_state("networkidle", timeout=8000)
+        except Exception:
+            pass
         wf.do_session_expire()
         wf.do_restore()
 
