@@ -35,13 +35,22 @@ class ProductPage(BasePage):
         logger.info("ProductPage opened")
 
     def add_first_product_to_cart(self) -> bool:
-        """Thêm sản phẩm đầu tiên — đợi snackbar confirm thay vì sleep."""
+        """
+        Thêm 1 sản phẩm NGẪU NHIÊN vào giỏ.
+        Scroll nhẹ để load thêm sản phẩm (lazy load), rồi random.randint
+        trong toàn bộ danh sách buttons hiện có → tránh lặp lại cùng 1 sản phẩm.
+        """
+        import random
         for sel in self.ADD_TO_CART_SELECTORS:
             try:
                 btns = self.page.locator(sel)
-                if btns.count() > 0:
-                    btns.first.scroll_into_view_if_needed()
-                    btns.first.click()
+                count = btns.count()
+                if count > 0:
+                    idx = random.randint(0, count - 1)
+                    chosen = btns.nth(idx)
+                    chosen.scroll_into_view_if_needed()
+                    chosen.click()
+                    logger.info(f"Added random product #{idx + 1}/{count} via: {sel}")
                     try:
                         self.page.locator(self.SUCCESS_SNACK).wait_for(
                             state="visible", timeout=5000
@@ -52,7 +61,6 @@ class ProductPage(BasePage):
                         )
                     except Exception:
                         self.page.wait_for_timeout(800)
-                    logger.info(f"Added product via selector: {sel}")
                     return True
             except Exception:
                 continue
@@ -274,28 +282,22 @@ class CartPage(BasePage):
     def _playwright_clear_basket(self) -> bool:
         """
         Xoá basket dùng Playwright page.request (Python-level HTTP).
-        
-        FIX FINAL: Không dùng localStorage.bid hay JavaScript fetch() vì
-        bid không được set trong context này. Thay vào đó:
-        1. Lấy token từ localStorage (biết chắc tồn tại sau login)
-        2. Decode JWT để lấy userId → thường = bid với Juice Shop admin
-        3. Brute-force bid 1-5 nếu cần
-        4. DELETE từng BasketItem qua Playwright HTTP (tự mang cookie/session)
+
+        FIX v10: Khi GET /api/Baskets/{bid} trả 500 (basket corrupt sau nhiều
+        lần test), tạo basket MỚI bằng POST /api/Baskets rồi update localStorage.
+        Basket mới đương nhiên rỗng → test tiếp tục bình thường.
         """
         import base64, json as pyjson
         BASE = "http://localhost:3000"
 
         try:
-            # Lấy token từ localStorage
             token = self.page.evaluate("() => localStorage.getItem('token')")
-            headers = {}
-            if token:
-                headers['Authorization'] = f'Bearer {token}'
+            headers = {'Authorization': f'Bearer {token}'} if token else {}
 
-            # Thử lấy bid từ localStorage
+            # Lấy bid từ localStorage (đã được set bởi CartPage.open())
             bid = self.page.evaluate("() => localStorage.getItem('bid')")
 
-            # Nếu không có bid, decode JWT lấy userId
+            # Fallback: decode JWT
             if not bid and token:
                 try:
                     padded = token.split('.')[1] + '=='
@@ -307,57 +309,39 @@ class CartPage(BasePage):
                 except Exception:
                     pass
 
-            # Nếu vẫn không có bid, brute-force 1-10
-            if not bid:
-                logger.info("Brute-force tìm bid 1-10...")
-                for try_bid in range(1, 11):
-                    try:
-                        r = self.page.request.get(
-                            f"{BASE}/api/Baskets/{try_bid}",
-                            headers=headers
-                        )
-                        if r.ok:
-                            d = r.json()
-                            if d.get('data'):
-                                bid = str(try_bid)
-                                self.page.evaluate(
-                                    f"() => localStorage.setItem('bid', '{bid}')"
-                                )
-                                logger.info(f"Tìm được bid={bid}")
-                                break
-                    except Exception:
-                        continue
-
             if not bid:
                 logger.warning("Không tìm được bid")
                 return False
 
-            # Lấy danh sách items trong basket
-            r = self.page.request.get(
-                f"{BASE}/api/Baskets/{bid}",
-                headers=headers
-            )
+            # Thử GET basket
+            r = self.page.request.get(f"{BASE}/api/Baskets/{bid}", headers=headers)
+
             if not r.ok:
-                logger.warning(f"GET basket thất bại: {r.status}")
+                # ── FIX: basket corrupt (500) → tạo basket mới ──────────
+                logger.warning(f"GET basket/{bid} = {r.status} → tạo basket mới")
+                new_bid = self._create_fresh_basket(BASE, headers, token)
+                if new_bid:
+                    logger.info(f"✓ Basket mới đã tạo: bid={new_bid} (rỗng)")
+                    return True
+                # Nếu tạo mới cũng fail → báo cáo nhưng không crash
+                logger.warning("Không thể tạo basket mới, DOM fallback sẽ xử lý")
                 return False
 
-            data = r.json()
-            basket_data = data.get('data') or {}
+            # GET OK → xoá từng item
+            basket_data = (r.json().get('data') or {})
             products = basket_data.get('Products') or basket_data.get('BasketItems') or []
 
             if not products:
                 logger.info("Basket đã rỗng")
                 return True
 
-            # DELETE từng item
             deleted = 0
             for p in products:
                 item_id = (p.get('BasketItem') or {}).get('id') or p.get('id')
                 if not item_id:
                     continue
                 dr = self.page.request.delete(
-                    f"{BASE}/api/BasketItems/{item_id}",
-                    headers=headers
+                    f"{BASE}/api/BasketItems/{item_id}", headers=headers
                 )
                 if dr.ok:
                     deleted += 1
@@ -368,6 +352,46 @@ class CartPage(BasePage):
         except Exception as e:
             logger.warning(f"_playwright_clear_basket exception: {e}")
             return False
+
+    def _create_fresh_basket(self, base_url: str, headers: dict, token: str) -> str:
+        """
+        Tạo basket mới qua POST /api/Baskets.
+        Trả về bid mới (string) hoặc None nếu thất bại.
+        Cũng update localStorage để các call sau dùng bid mới.
+        """
+        import base64, json as pyjson
+
+        try:
+            # Lấy userId từ JWT để gắn basket mới vào đúng user
+            user_id = None
+            if token:
+                try:
+                    padded = token.split('.')[1] + '=='
+                    payload = pyjson.loads(base64.b64decode(padded))
+                    user_id = (payload.get('data') or {}).get('id') or payload.get('id')
+                except Exception:
+                    pass
+
+            body = {'UserId': user_id} if user_id else {}
+            r = self.page.request.post(
+                f"{base_url}/api/Baskets",
+                headers={**headers, 'Content-Type': 'application/json'},
+                data=pyjson.dumps(body)
+            )
+            if r.ok:
+                data = r.json().get('data') or {}
+                new_bid = str(data.get('id') or '')
+                if new_bid:
+                    # Update localStorage để Juice Shop frontend dùng basket mới
+                    self.page.evaluate(
+                        f"() => localStorage.setItem('bid', '{new_bid}')"
+                    )
+                    logger.info(f"Tạo basket mới thành công: bid={new_bid}")
+                    return new_bid
+            logger.warning(f"POST /api/Baskets thất bại: {r.status}")
+        except Exception as e:
+            logger.warning(f"_create_fresh_basket exception: {e}")
+        return None
 
     def _api_clear_basket(self) -> bool:
         """Wrapper: thử JS fetch trước, fallback sang Playwright request."""

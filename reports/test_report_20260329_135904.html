@@ -40,12 +40,12 @@
 <body>
   <div class="header">
     <h1>TEST REPORT — Kiểm chứng Absence of Deadlock</h1>
-    <p>OWASP Juice Shop · FSM · Data-Driven Testing · 20260328_225223</p>
+    <p>OWASP Juice Shop · FSM · Data-Driven Testing · 20260329_135904</p>
   </div>
 
   <div class="summary">
-    <div class="stat purple"><div class="n">9</div><div class="l">Tổng TC</div></div>
-    <div class="stat green"><div class="n">9</div><div class="l">PASS</div></div>
+    <div class="stat purple"><div class="n">10</div><div class="l">Tổng TC</div></div>
+    <div class="stat green"><div class="n">10</div><div class="l">PASS</div></div>
     <div class="stat red"><div class="n">0</div><div class="l">FAIL</div></div>
     <div class="stat"><div class="n">100.0%</div><div class="l">Pass Rate</div></div>
     <div class="stat red"><div class="n">0</div><div class="l">Counterexamples</div></div>
@@ -54,7 +54,7 @@
   <div class="content">
     
 
-    <h2>Kết quả chi tiết (9 test cases)</h2>
+    <h2>Kết quả chi tiết (10 test cases)</h2>
     <table>
       <thead>
         <tr>
@@ -72,7 +72,7 @@
               <td>authenticated</td>
               <td>authenticated</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:52:34</td>
+              <td>2026-03-29T13:59:09</td>
             </tr>
             <tr class="pass">
               <td>BD_UI_001</td>
@@ -82,7 +82,7 @@
               <td>guest</td>
               <td>guest</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:52:47</td>
+              <td>2026-03-29T13:59:24</td>
             </tr>
             <tr class="pass">
               <td>VP_UI_002</td>
@@ -92,7 +92,7 @@
               <td>cart_active</td>
               <td>cart_active</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:52:55</td>
+              <td>2026-03-29T13:59:31</td>
             </tr>
             <tr class="pass">
               <td>VP_UI_003</td>
@@ -102,7 +102,7 @@
               <td>checkout</td>
               <td>checkout</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:53:16</td>
+              <td>2026-03-29T13:59:52</td>
             </tr>
             <tr class="pass">
               <td>BD_UI_002</td>
@@ -112,7 +112,7 @@
               <td>guest</td>
               <td>guest</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:53:21</td>
+              <td>2026-03-29T13:59:57</td>
             </tr>
             <tr class="pass">
               <td>AG_UI_001</td>
@@ -122,7 +122,7 @@
               <td>cart_active</td>
               <td>cart_active</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:53:27</td>
+              <td>2026-03-29T14:00:03</td>
             </tr>
             <tr class="pass">
               <td>UI_VP_001</td>
@@ -132,7 +132,7 @@
               <td>authenticated</td>
               <td>authenticated</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:53:33</td>
+              <td>2026-03-29T14:00:09</td>
             </tr>
             <tr class="pass">
               <td>UI_VP_003</td>
@@ -142,7 +142,7 @@
               <td>confirmed</td>
               <td>confirmed</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:54:45</td>
+              <td>2026-03-29T14:01:19</td>
             </tr>
             <tr class="pass">
               <td>UI_BD_001</td>
@@ -152,13 +152,23 @@
               <td>guest</td>
               <td>guest</td>
               <td><span class="badge pass">PASS</span></td>
-              <td>2026-03-28T22:55:01</td>
+              <td>2026-03-29T14:01:33</td>
+            </tr>
+            <tr class="pass">
+              <td>UI_BD_002</td>
+              <td>UI Boundary</td>
+              <td>Giỏ rỗng → FSM không đạt confirmed, không deadlock</td>
+              <td><code>login,clear_basket,try_checkout,verify_no_deadlock</code></td>
+              <td>cart_active</td>
+              <td>confirmed</td>
+              <td><span class="badge pass">PASS</span></td>
+              <td>2026-03-29T14:02:01</td>
             </tr></tbody>
     </table>
   </div>
 
   <div class="footer">
-    Báo cáo được tự động sinh bởi DeadlockTestSuite · 28/03/2026 22:55:27
+    Báo cáo được tự động sinh bởi DeadlockTestSuite · 29/03/2026 14:02:02
   </div>
 </body>
 </html>

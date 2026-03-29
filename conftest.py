@@ -1,17 +1,20 @@
 """conftest.py — Pytest fixtures: FSM + Playwright + Report.
 
-FIX v2:
-- logged_in_page: bid chỉ được tạo sau lần ADD ITEM đầu tiên, không phải sau login.
-  Fixture giờ add 1 item để kích hoạt bid, sau đó xoá item (để test tự quản lý giỏ).
-  Hoặc nếu test cần giỏ sạch (test_ui_empty_cart), bid vẫn tồn tại sau remove.
-
-- juice_shop_page: thêm wait_for_load_state("networkidle") cho ổn định hơn.
-
-- _dismiss: tăng timeout, thêm "Me want it!" cookie banner.
+FIX v3:
+- pytest_sessionstart: reset Juice Shop DB truoc khi chay test suite.
+  Restart Docker container → seed data sach, khong con Sold Out / Only 1 left.
+  Set env SKIP_DB_RESET=1 de bo qua (debug nhanh).
+  Set env JUICE_SHOP_CONTAINER=<ten> neu container khac "juice-shop".
 """
-import pytest, sys, logging, os
+import pytest, sys, logging, os, subprocess, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
+
+try:
+    import requests as _requests
+    _HAS_REQUESTS = True
+except ImportError:
+    _HAS_REQUESTS = False
 
 from utils.fsm_engine import OrderWorkflow, ConcurrentWorkflowSimulator
 from utils.data_loader import DataLoader
@@ -23,6 +26,72 @@ logging.basicConfig(level=logging.INFO,
 BASE_URL   = os.environ.get("JUICE_SHOP_URL", "http://localhost:3000")
 ADMIN_USER = "admin@juice-sh.op"
 ADMIN_PASS = "admin123"
+
+JUICE_SHOP_CONTAINER = os.environ.get("JUICE_SHOP_CONTAINER", "juice-shop")
+_log = logging.getLogger("conftest.reset")
+
+
+# ── DB Reset ─────────────────────────────────────────────────
+
+def _wait_for_juice_shop(timeout=60):
+    """Poll BASE_URL cho đến khi trả 200 hoặc hết timeout."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            if _HAS_REQUESTS:
+                r = _requests.get(BASE_URL, timeout=3)
+                if r.status_code == 200:
+                    return True
+            else:
+                import urllib.request
+                urllib.request.urlopen(BASE_URL, timeout=3)
+                return True
+        except Exception:
+            pass
+        time.sleep(2)
+    return False
+
+
+def _reset_juice_shop_db():
+    """
+    Reset Juice Shop DB bang cach restart Docker container.
+    Container se tu seed lai data sach khi khoi dong.
+    """
+    if os.environ.get("SKIP_DB_RESET", "").strip() == "1":
+        _log.info("SKIP_DB_RESET=1 → bo qua reset DB")
+        return
+
+    _log.info("Dang reset Juice Shop DB (container: %s)...", JUICE_SHOP_CONTAINER)
+    try:
+        result = subprocess.run(
+            ["docker", "restart", JUICE_SHOP_CONTAINER],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            _log.warning(
+                "docker restart that bai (code %d): %s",
+                result.returncode, result.stderr.strip()
+            )
+            _log.warning("Tiep tuc chay test voi DB hien tai.")
+            return
+        _log.info("Container '%s' da restart, dang cho khoi dong...", JUICE_SHOP_CONTAINER)
+    except FileNotFoundError:
+        _log.warning("Docker khong tim thay tren PATH → bo qua reset DB.")
+        return
+    except subprocess.TimeoutExpired:
+        _log.warning("docker restart timeout → bo qua reset DB.")
+        return
+
+    if _wait_for_juice_shop(timeout=60):
+        _log.info("✓ Juice Shop san sang tai %s — DB da reset sach!", BASE_URL)
+    else:
+        _log.warning("Juice Shop chua san sang sau 60s — DB co the chua sach.")
+
+
+def pytest_sessionstart(session):
+    """Chay 1 lan truoc toan bo test session."""
+    _reset_juice_shop_db()
+
 
 
 # ── Session fixtures ─────────────────────────────────────────
