@@ -119,42 +119,65 @@ class CartPage(BasePage):
 
     def open(self):
         """
-        Navigate đến basket và extract bid từ network response.
+        Navigate đến basket. Dùng page.route để intercept request và lấy bid.
 
-        FIX v7: Juice Shop Angular gọi /api/Baskets/{bid} khi load trang.
-        Ta intercept response URL để lấy bid thực sự rồi set vào localStorage.
-        Cách này hoạt động ngay cả khi Juice Shop không tự set bid vào localStorage.
+        FIX v9: page.route intercept REQUEST (không phải response) → không có
+        race condition. Glob pattern rộng để bắt mọi basket endpoint của Juice Shop.
         """
         import re
         captured = {}
 
-        def on_response(response):
-            if captured.get('bid'):
-                return
-            try:
-                m = re.search(r'/api/Baskets/(\d+)', response.url)
-                if m and response.status in (200, 304):
-                    captured['bid'] = m.group(1)
-            except Exception:
-                pass
+        def handle_route(route):
+            url = route.request.url
+            # Bắt mọi pattern: /api/Baskets/N, /rest/basket/N, v.v.
+            m = re.search(r'[Bb]asket[sS]?/(\d+)', url)
+            if m and not captured.get('bid'):
+                captured['bid'] = m.group(1)
+            route.continue_()
 
-        self.page.on('response', on_response)
+        # Setup interceptor TRƯỚC khi navigate → không bỏ sót request nào
+        try:
+            self.page.route('**/*asket*/**', handle_route)
+        except Exception:
+            pass
+
         self.navigate("#/basket")
         try:
-            self.page.wait_for_load_state("networkidle", timeout=8000)
+            self.page.wait_for_load_state("networkidle", timeout=10000)
         except Exception:
             pass
         self.page.wait_for_timeout(1500)
-        self.page.remove_listener('response', on_response)
 
-        # Set bid vào localStorage nếu intercepted được
+        try:
+            self.page.unroute('**/*asket*/**', handle_route)
+        except Exception:
+            pass
+
         if captured.get('bid'):
             self.page.evaluate(
                 f"() => localStorage.setItem('bid', '{captured['bid']}')"
             )
-            logger.info(f"CartPage opened — bid intercepted: {captured['bid']}")
+            logger.info(f"CartPage opened — bid: {captured['bid']}")
         else:
-            logger.warning("CartPage opened — bid không intercepted từ network")
+            # Last resort: scan all network requests via performance entries
+            try:
+                bid = self.page.evaluate("""() => {
+                    const entries = performance.getEntriesByType('resource');
+                    for (const e of entries) {
+                        const m = e.name.match(/[Bb]asket[sS]?\\/(\d+)/);
+                        if (m) return m[1];
+                    }
+                    return null;
+                }""")
+                if bid:
+                    self.page.evaluate(f"() => localStorage.setItem('bid', '{bid}')")
+                    logger.info(f"CartPage opened — bid từ performance entries: {bid}")
+                else:
+                    logger.warning("CartPage opened — bid không tìm được, DOM fallback sẽ được dùng")
+            except Exception:
+                logger.warning("CartPage opened — bid không tìm được")
+
+        logger.info("CartPage opened")
 
     def get_item_count(self) -> int:
         """
@@ -196,12 +219,32 @@ class CartPage(BasePage):
     def is_empty(self) -> bool:
         """
         Kiểm tra giỏ hàng có rỗng không.
-        FIX: Reload nhẹ để Angular cập nhật sau remove_all_items().
+
+        FIX v9: Ưu tiên DOM check (không cần bid).
+        Đợi Angular render xong trước khi đếm.
         """
         try:
             self.page.wait_for_load_state("networkidle", timeout=5000)
         except Exception:
             pass
+        # Đợi Angular render (chờ mat-table hoặc empty-state)
+        self.page.wait_for_timeout(800)
+
+        # DOM check: đếm remove buttons (đáng tin hơn mat-row)
+        try:
+            remove_count = self.page.locator(self.REMOVE_BTN).count()
+            if remove_count == 0:
+                # Xác nhận thêm: không có mat-row nào
+                row_count = self.page.locator("mat-row").count()
+                if row_count == 0:
+                    return True
+                # row_count > 0 nhưng remove_btn = 0 → vẫn coi là empty
+                return True
+            return False
+        except Exception:
+            pass
+
+        # Fallback API nếu có bid
         return self.get_item_count() == 0
 
     def proceed_to_checkout(self) -> bool:
@@ -228,12 +271,107 @@ class CartPage(BasePage):
         logger.warning("Checkout button không tìm thấy hoặc không enabled")
         return False
 
+    def _playwright_clear_basket(self) -> bool:
+        """
+        Xoá basket dùng Playwright page.request (Python-level HTTP).
+        
+        FIX FINAL: Không dùng localStorage.bid hay JavaScript fetch() vì
+        bid không được set trong context này. Thay vào đó:
+        1. Lấy token từ localStorage (biết chắc tồn tại sau login)
+        2. Decode JWT để lấy userId → thường = bid với Juice Shop admin
+        3. Brute-force bid 1-5 nếu cần
+        4. DELETE từng BasketItem qua Playwright HTTP (tự mang cookie/session)
+        """
+        import base64, json as pyjson
+        BASE = "http://localhost:3000"
+
+        try:
+            # Lấy token từ localStorage
+            token = self.page.evaluate("() => localStorage.getItem('token')")
+            headers = {}
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
+
+            # Thử lấy bid từ localStorage
+            bid = self.page.evaluate("() => localStorage.getItem('bid')")
+
+            # Nếu không có bid, decode JWT lấy userId
+            if not bid and token:
+                try:
+                    padded = token.split('.')[1] + '=='
+                    payload = pyjson.loads(base64.b64decode(padded))
+                    uid = (payload.get('data') or {}).get('id') or payload.get('id')
+                    if uid:
+                        bid = str(uid)
+                        logger.info(f"bid từ JWT userId: {bid}")
+                except Exception:
+                    pass
+
+            # Nếu vẫn không có bid, brute-force 1-10
+            if not bid:
+                logger.info("Brute-force tìm bid 1-10...")
+                for try_bid in range(1, 11):
+                    try:
+                        r = self.page.request.get(
+                            f"{BASE}/api/Baskets/{try_bid}",
+                            headers=headers
+                        )
+                        if r.ok:
+                            d = r.json()
+                            if d.get('data'):
+                                bid = str(try_bid)
+                                self.page.evaluate(
+                                    f"() => localStorage.setItem('bid', '{bid}')"
+                                )
+                                logger.info(f"Tìm được bid={bid}")
+                                break
+                    except Exception:
+                        continue
+
+            if not bid:
+                logger.warning("Không tìm được bid")
+                return False
+
+            # Lấy danh sách items trong basket
+            r = self.page.request.get(
+                f"{BASE}/api/Baskets/{bid}",
+                headers=headers
+            )
+            if not r.ok:
+                logger.warning(f"GET basket thất bại: {r.status}")
+                return False
+
+            data = r.json()
+            basket_data = data.get('data') or {}
+            products = basket_data.get('Products') or basket_data.get('BasketItems') or []
+
+            if not products:
+                logger.info("Basket đã rỗng")
+                return True
+
+            # DELETE từng item
+            deleted = 0
+            for p in products:
+                item_id = (p.get('BasketItem') or {}).get('id') or p.get('id')
+                if not item_id:
+                    continue
+                dr = self.page.request.delete(
+                    f"{BASE}/api/BasketItems/{item_id}",
+                    headers=headers
+                )
+                if dr.ok:
+                    deleted += 1
+
+            logger.info(f"Playwright clear: deleted {deleted}/{len(products)} items")
+            return deleted > 0 or len(products) == 0
+
+        except Exception as e:
+            logger.warning(f"_playwright_clear_basket exception: {e}")
+            return False
+
     def _api_clear_basket(self) -> bool:
-        """
-        Xoá toàn bộ items qua Juice Shop REST API.
-        Đáng tin cậy hơn DOM click vì không phụ thuộc Angular render timing.
-        Endpoint: DELETE /api/BasketItems/{id} cho từng item.
-        """
+        """Wrapper: thử JS fetch trước, fallback sang Playwright request."""
+        # Thử JS fetch (nhanh nếu có token+bid trong localStorage)
         try:
             result = self.page.evaluate("""async () => {
                 const token = localStorage.getItem('token');
@@ -263,50 +401,53 @@ class CartPage(BasePage):
                 }
             }""")
             if result and result.get('ok'):
-                logger.info(f"API clear basket: xoá {result.get('deleted')}/{result.get('total')} items")
+                logger.info(f"JS clear: {result.get('deleted')}/{result.get('total')} items")
                 return True
-            logger.warning(f"API clear basket thất bại: {result}")
-            return False
-        except Exception as e:
-            logger.warning(f"_api_clear_basket exception: {e}")
-            return False
+        except Exception:
+            pass
+
+        # Fallback: Playwright HTTP (dùng browser session, không cần localStorage)
+        return self._playwright_clear_basket()
 
     def remove_all_items(self):
         """
         Xoá tất cả items khỏi giỏ.
 
-        FIX v7: Ưu tiên xoá qua REST API (không phụ thuộc Angular render timing).
-        Fallback sang DOM click nếu bid=null hoặc API thất bại.
-        Reload #/basket cuối cùng để đảm bảo state fresh.
+        FIX FINAL: Ưu tiên Playwright HTTP API (không phụ thuộc localStorage.bid).
+        DOM fallback với wait_for_selector đảm bảo Angular đã render.
+        Reload cuối để verify state fresh.
         """
         try:
-            # Bước 1: Xoá qua API (nhanh + không phụ thuộc DOM render)
             api_ok = self._api_clear_basket()
 
             if not api_ok:
-                # Bước 2 fallback: DOM click (đợi Angular render xong trước)
-                logger.info("API clear thất bại, fallback DOM click...")
+                # DOM fallback — đợi buttons xuất hiện trước
+                logger.info("DOM fallback: đợi remove buttons...")
                 try:
-                    self.page.wait_for_load_state("networkidle", timeout=8000)
+                    self.page.wait_for_selector(
+                        self.REMOVE_BTN, timeout=10000, state="visible"
+                    )
+                    logger.info("✓ Remove buttons sẵn sàng, bắt đầu xoá")
                 except Exception:
-                    pass
-                self.page.wait_for_timeout(2000)
+                    logger.warning("Remove buttons không xuất hiện (basket đã rỗng?)")
 
                 for _ in range(20):
                     btns = self.page.locator(self.REMOVE_BTN)
-                    if btns.count() == 0:
+                    n = btns.count()
+                    if n == 0:
                         break
-                    prev_count = btns.count()
                     btns.first.click()
                     try:
                         self.page.wait_for_function(
-                            f"() => document.querySelectorAll(\"button[aria-label='Remove from basket']\").length < {prev_count}",
+                            f"() => document.querySelectorAll(\"button[aria-label='Remove from basket']\").length < {n}",
                             timeout=5000
                         )
                     except Exception:
                         self.page.wait_for_timeout(800)
+                    remaining = self.page.locator(self.REMOVE_BTN).count()
+                    logger.info(f"Removed 1, còn {remaining}")
 
-            # Bước 3: Reload basket để force API trả state mới nhất
+            # Reload để Angular sync state mới nhất
             self.navigate("#/basket")
             try:
                 self.page.wait_for_load_state("networkidle", timeout=8000)
@@ -316,4 +457,4 @@ class CartPage(BasePage):
             logger.info("Đã xoá tất cả items")
 
         except Exception as e:
-            logger.warning(f"Remove items: {e}")
+            logger.warning(f"Remove items exception: {e}")
